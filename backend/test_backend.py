@@ -58,13 +58,13 @@ def test_api_endpoints(filename):
     print("Starting FastAPI backend server in background...")
     proc = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
         cwd=os.path.dirname(os.path.abspath(__file__))
     )
     
     # Wait for server to boot
-    time.sleep(3)
+    time.sleep(5)
     
     base_url = "http://127.0.0.1:8000"
     
