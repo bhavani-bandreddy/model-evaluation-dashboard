@@ -108,3 +108,29 @@ With these changes, when you trigger a manual redeploy in Render:
 1. Go to the Render Dashboard, select **model-evaluation-backend**.
 2. Click **Manual Deploy** -> **Clear Cache and Deploy** to ensure a clean rebuild.
 3. If using a Render Paid plan (required for persistent disks), ensure the disk `sqlite-storage` is showing as attached in the **Disks** section. If using the Free plan, note that disk mounting is ignored, and database history will reset upon service restarts/redeployments.
+
+---
+
+## 6. Frontend Deployment to Vercel
+
+### Configuration Setup
+* The React components in `History.jsx` and `Evaluate.jsx` pull the API URL from `import.meta.env.VITE_API_URL` dynamically.
+* We created `frontend/.env` and updated `frontend/.env.example` to point to the production backend URL:
+  ```env
+  VITE_API_URL=https://model-evaluation-backend.onrender.com
+  ```
+
+### Local Build Validation
+Running `npm.cmd run build` inside `frontend/` succeeds and builds the production bundle into `dist/`.
+
+### Exact Vercel Deployment Settings
+When importing this repository into Vercel, configure the following settings:
+1. **Framework Preset**: Select `Vite` (Vercel should auto-detect this).
+2. **Root Directory**: Set this to `frontend`.
+3. **Build Command**: `npm run build` (or keep the default `vite build`).
+4. **Output Directory**: `dist` (or keep default).
+5. **Environment Variables**:
+   * **Key**: `VITE_API_URL`
+   * **Value**: `https://model-evaluation-backend.onrender.com`
+   *(Vite embeds variables starting with `VITE_` during build time, so setting this environment variable in the Vercel project settings is mandatory).*
+
