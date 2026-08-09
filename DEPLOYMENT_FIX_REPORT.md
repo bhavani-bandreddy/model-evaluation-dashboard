@@ -15,10 +15,11 @@ This report summarizes the diagnostics, root cause, changes made, and verificati
 ## 2. Solutions Implemented
 
 ### Python Version Selected
-We locked the Python version to **`Python 3.11.9`** using three layers of runtime declarations for maximum reliability:
-1. **`runtime.txt` (Repository Root)**: Defines the Python environment for the repo.
-2. **`backend/runtime.txt` (Backend Root)**: Defines the Python environment for the backend subfolder (the `rootDir` of the Render web service).
-3. **`render.yaml` Environment Variable**: Sets `PYTHON_VERSION` to `3.11.9`.
+We locked the Python version to **`Python 3.11.9`** using:
+1. **`.python-version` (Repository Root)**: Contains `3.11.9` (Render's officially supported configuration file).
+2. **`backend/.python-version` (Backend Root)**: Contains `3.11.9` (For root-level configurations where the service root dir is `backend`).
+
+Note: `runtime.txt` files were removed because Render does not support them and completely ignores them. Furthermore, because this web service was set up manually in the Render dashboard (and not deployed via a Blueprint), Render ignores `render.yaml` environment variables. By using `.python-version` files, Render will detect the version directly from our repository files on manual checkout.
 
 ### Dependency Versions Selected
 We pinned stable dependency versions in `backend/requirements.txt`. Most importantly, we pinned `numpy==1.26.4` (the final stable 1.x version of NumPy) instead of `numpy<2.0.0` to ensure stable dependency resolution. 
@@ -42,8 +43,10 @@ These versions are fully compatible with Python 3.11, meaning **prebuilt wheels 
 
 ## 3. Files Changed
 
-* **[NEW] [runtime.txt](file:///c:/Users/bhava/OneDrive/Desktop/sfcollab/model-evaluation-dashboard/runtime.txt)**: Root Python version configuration file.
-* **[NEW] [backend/runtime.txt](file:///c:/Users/bhava/OneDrive/Desktop/sfcollab/model-evaluation-dashboard/backend/runtime.txt)**: Backend-specific Python version configuration file.
+* **[DELETE] [runtime.txt](file:///c:/Users/bhava/OneDrive/Desktop/sfcollab/model-evaluation-dashboard/runtime.txt)**: Removed obsolete Heroku-style runtime configuration file.
+* **[DELETE] [backend/runtime.txt](file:///c:/Users/bhava/OneDrive/Desktop/sfcollab/model-evaluation-dashboard/backend/runtime.txt)**: Removed obsolete Heroku-style runtime configuration file.
+* **[NEW] [.python-version](file:///c:/Users/bhava/OneDrive/Desktop/sfcollab/model-evaluation-dashboard/.python-version)**: Root Python version configuration file (officially supported by Render).
+* **[NEW] [backend/.python-version](file:///c:/Users/bhava/OneDrive/Desktop/sfcollab/model-evaluation-dashboard/backend/.python-version)**: Backend-specific Python version configuration file (officially supported by Render).
 * **[MODIFY] [backend/requirements.txt](file:///c:/Users/bhava/OneDrive/Desktop/sfcollab/model-evaluation-dashboard/backend/requirements.txt)**: Pinned NumPy version for compatibility.
 * **[MODIFY] [render.yaml](file:///c:/Users/bhava/OneDrive/Desktop/sfcollab/model-evaluation-dashboard/render.yaml)**: Configured python version env variable and sqlite persistent storage disk.
 * **[MODIFY] [backend/test_backend.py](file:///c:/Users/bhava/OneDrive/Desktop/sfcollab/model-evaluation-dashboard/backend/test_backend.py)**: Fixed uvicorn background process pipe blocking on Windows and increased boot sleep duration to ensure test stability.
@@ -95,7 +98,7 @@ These versions are fully compatible with Python 3.11, meaning **prebuilt wheels 
 
 ### Expected Behavior on Redeployment
 With these changes, when you trigger a manual redeploy in Render:
-1. Render will identify the Python version as `3.11.9` from the `PYTHON_VERSION` env variable, `backend/runtime.txt`, and `runtime.txt`.
+1. Render will identify the Python version as `3.11.9` from the `.python-version` files.
 2. It will boot a Python 3.11.9 virtual environment.
 3. When running `pip install -r requirements.txt`, pip will find prebuilt wheels for `pandas==2.2.2`, `numpy==1.26.4`, and `scikit-learn==1.5.0` matching Python 3.11.
 4. Pip will download and install these prebuilt wheels in seconds without triggering C/Cython compilation.
