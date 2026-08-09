@@ -59,7 +59,8 @@ def test_api_endpoints(filename):
     proc = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000"],
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
+        stderr=subprocess.PIPE,
+        cwd=os.path.dirname(os.path.abspath(__file__))
     )
     
     # Wait for server to boot
