@@ -227,3 +227,229 @@ def get_metrics(db: Session = Depends(get_db)):
         "model_distribution": model_counts,
         "performance_by_model": perf_by_model
     }
+
+@app.get("/api/dataset", summary="Get default dataset metadata and info")
+def get_dataset_info():
+    """
+    Returns metadata about the default loan training dataset.
+    """
+    import os
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    dataset_path = os.path.join(base_dir, "data", "loan_training_data.csv")
+    
+    if not os.path.exists(dataset_path):
+        parent_dir = os.path.dirname(base_dir)
+        dataset_path = os.path.join(parent_dir, "loan_training_data.csv")
+        
+    if not os.path.exists(dataset_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Default dataset loan_training_data.csv not found."
+        )
+        
+    try:
+        df = pd.read_csv(dataset_path)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error reading dataset: {str(e)}"
+        )
+        
+    # Check dataset structure
+    target = "approved"
+    if target not in df.columns:
+        target = df.columns[-1]
+        
+    features = [col for col in df.columns if col != target]
+    
+    # Class distribution
+    class_dist = {str(k): int(v) for k, v in df[target].value_counts().to_dict().items()}
+    
+    # Missing values
+    missing_count = int(df.isnull().sum().sum())
+    missing_by_col = {col: int(val) for col, val in df.isnull().sum().to_dict().items()}
+    
+    # Data types
+    dtypes = {col: str(dtype) for col, dtype in df.dtypes.items()}
+    
+    total_records = len(df)
+    train_samples = int(total_records * 0.8)
+    test_samples = total_records - train_samples
+    
+    return {
+        "dataset_name": "loan_training_data.csv",
+        "records": total_records,
+        "features": features,
+        "features_count": len(features),
+        "target": target,
+        "classes_count": len(df[target].unique()),
+        "classes": [str(c) for c in df[target].unique()],
+        "train_samples": train_samples,
+        "test_samples": test_samples,
+        "class_distribution": class_dist,
+        "missing_values": {
+            "total": missing_count,
+            "columns": missing_by_col
+        },
+        "data_types": dtypes
+    }
+
+@app.get("/api/models", response_model=List[str], summary="Get available models")
+def get_api_models():
+    """
+    Returns a list of all machine learning models supported by the evaluation harness.
+    """
+    return get_supported_models()
+
+@app.get("/api/evaluation", summary="Train and evaluate all four models on the default dataset")
+def evaluate_all_models(db: Session = Depends(get_db)):
+    """
+    Trains and evaluates Logistic Regression, Random Forest, SVM, and Gradient Boosting
+    on the default loan dataset. Automatically records them to evaluation history if not already present.
+    """
+    import os
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    dataset_path = os.path.join(base_dir, "data", "loan_training_data.csv")
+    
+    if not os.path.exists(dataset_path):
+        parent_dir = os.path.dirname(base_dir)
+        dataset_path = os.path.join(parent_dir, "loan_training_data.csv")
+        
+    if not os.path.exists(dataset_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Default dataset loan_training_data.csv not found."
+        )
+        
+    try:
+        df = pd.read_csv(dataset_path)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error reading dataset: {str(e)}"
+        )
+        
+    target = "approved"
+    if target not in df.columns:
+        target = df.columns[-1]
+        
+    models_to_train = get_supported_models()
+    results = {}
+    
+    for model_name in models_to_train:
+        try:
+            res = evaluate_classifier(df, target, model_name)
+            results[model_name] = res
+            
+            # Save to database run history ONLY if we don't have a very recent run in database
+            # to avoid cluttering history with duplicate page load runs.
+            recent_run = db.query(EvaluationRun).filter(
+                EvaluationRun.dataset_name == "loan_training_data.csv",
+                EvaluationRun.model_name == model_name,
+                EvaluationRun.target_column == target
+            ).order_by(EvaluationRun.evaluated_at.desc()).first()
+            
+            # If no run exists, or it's older than 10 minutes, save it
+            should_save = True
+            if recent_run:
+                time_diff = datetime.datetime.utcnow() - recent_run.evaluated_at
+                if time_diff.total_seconds() < 600:
+                    should_save = False
+                    results[model_name]["id"] = recent_run.id
+                    results[model_name]["dataset_name"] = "loan_training_data.csv"
+                    results[model_name]["evaluated_at"] = recent_run.evaluated_at.isoformat()
+            
+            if should_save:
+                run = EvaluationRun(
+                    dataset_name="loan_training_data.csv",
+                    model_name=model_name,
+                    target_column=target,
+                    evaluated_at=datetime.datetime.utcnow(),
+                    accuracy=res["accuracy"],
+                    precision=res["precision"],
+                    recall=res["recall"],
+                    f1_score=res["f1_score"],
+                    roc_auc=res["roc_auc"],
+                    confusion_matrix=json.dumps(res["confusion_matrix"]),
+                    classification_report=json.dumps(res["classification_report"]),
+                    run_time_seconds=res["run_time_seconds"]
+                )
+                db.add(run)
+                db.commit()
+                db.refresh(run)
+                
+                results[model_name]["id"] = run.id
+                results[model_name]["dataset_name"] = "loan_training_data.csv"
+                results[model_name]["evaluated_at"] = run.evaluated_at.isoformat()
+                
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Evaluation failed for {model_name}: {str(e)}"
+            )
+            
+    # Determine best model based on F1-score (or Accuracy if they are equal, F1-score is preferred here)
+    best_model = None
+    best_score = -1.0
+    for name, res in results.items():
+        score = res["f1_score"]
+        if score > best_score:
+            best_score = score
+            best_model = name
+            
+    return {
+        "models": results,
+        "best_model": {
+            "model_name": best_model,
+            "score": best_score,
+            "metric": "F1-score"
+        }
+    }
+
+@app.get("/api/evaluation/{model_name}", summary="Get evaluation details for a specific model")
+def get_model_evaluation(model_name: str, db: Session = Depends(get_db)):
+    """
+    Returns the evaluation results for a single classifier model on the default dataset.
+    """
+    if model_name not in get_supported_models():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Model '{model_name}' not found. Available models: {get_supported_models()}"
+        )
+        
+    import os
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    dataset_path = os.path.join(base_dir, "data", "loan_training_data.csv")
+    
+    if not os.path.exists(dataset_path):
+        parent_dir = os.path.dirname(base_dir)
+        dataset_path = os.path.join(parent_dir, "loan_training_data.csv")
+        
+    if not os.path.exists(dataset_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Default dataset loan_training_data.csv not found."
+        )
+        
+    try:
+        df = pd.read_csv(dataset_path)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error reading dataset: {str(e)}"
+        )
+        
+    target = "approved"
+    if target not in df.columns:
+        target = df.columns[-1]
+        
+    try:
+        res = evaluate_classifier(df, target, model_name)
+        res["dataset_name"] = "loan_training_data.csv"
+        return res
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Evaluation failed: {str(e)}"
+        )
+

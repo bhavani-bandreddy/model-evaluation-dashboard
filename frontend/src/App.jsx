@@ -3,15 +3,17 @@ import { Home as HomeIcon, PlayCircle, History as HistoryIcon, Activity, Menu, X
 import Home from './components/Home';
 import Evaluate from './components/Evaluate';
 import History from './components/History';
+import Dashboard from './components/Dashboard';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navigationItems = [
-    { id: 'home', label: 'Home', icon: HomeIcon },
-    { id: 'evaluate', label: 'Evaluate Model', icon: PlayCircle },
+    { id: 'dashboard', label: 'Dashboard', icon: Activity },
+    { id: 'evaluate', label: 'Custom Evaluate', icon: PlayCircle },
     { id: 'history', label: 'Run History', icon: HistoryIcon },
+    { id: 'home', label: 'About/Glossary', icon: HomeIcon },
   ];
 
   return (
@@ -19,7 +21,7 @@ export default function App() {
       {/* Navigation Header */}
       <header className="sticky top-0 z-50 w-full border-b border-slate-900 bg-slate-950/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setActiveTab('home')}>
+          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setActiveTab('dashboard')}>
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-brand-500/20">
               <Activity className="w-5 h-5 text-white" />
             </div>
@@ -89,7 +91,8 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
-        {activeTab === 'home' && <Home onLaunch={() => setActiveTab('evaluate')} />}
+        {activeTab === 'dashboard' && <Dashboard />}
+        {activeTab === 'home' && <Home onLaunch={() => setActiveTab('dashboard')} />}
         {activeTab === 'evaluate' && <Evaluate />}
         {activeTab === 'history' && <History />}
       </main>

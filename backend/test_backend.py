@@ -49,6 +49,70 @@ def test_evaluation_module(filename):
     assert results["accuracy"] >= 0.0
     print("Direct module test passed!")
 
+def test_new_api_endpoints(base_url):
+    print("\n--- Testing New API endpoints ---")
+    
+    # 1. Test /api/dataset
+    print("Testing GET /api/dataset...")
+    res = requests.get(f"{base_url}/api/dataset")
+    print("Response status:", res.status_code)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["dataset_name"] == "loan_training_data.csv"
+    assert data["records"] == 200
+    assert data["target"] == "approved"
+    assert len(data["features"]) == 4
+    assert data["classes_count"] == 2
+    assert data["train_samples"] == 160
+    assert data["test_samples"] == 40
+    print("GET /api/dataset passed!")
+    
+    # 2. Test /api/models
+    print("Testing GET /api/models...")
+    res = requests.get(f"{base_url}/api/models")
+    assert res.status_code == 200
+    models = res.json()
+    assert len(models) == 4
+    assert "Logistic Regression" in models
+    assert "Random Forest" in models
+    assert "SVM" in models
+    assert "Gradient Boosting" in models
+    print("GET /api/models passed!")
+    
+    # 3. Test /api/evaluation
+    print("Testing GET /api/evaluation...")
+    res = requests.get(f"{base_url}/api/evaluation")
+    assert res.status_code == 200
+    eval_res = res.json()
+    assert "models" in eval_res
+    assert "best_model" in eval_res
+    
+    # Verify all 4 models are present and have correct keys
+    for m in ["Logistic Regression", "Random Forest", "SVM", "Gradient Boosting"]:
+        assert m in eval_res["models"]
+        model_data = eval_res["models"][m]
+        assert "accuracy" in model_data
+        assert "precision" in model_data
+        assert "recall" in model_data
+        assert "f1_score" in model_data
+        assert "roc_auc" in model_data
+        assert "confusion_matrix" in model_data
+        assert "classification_report" in model_data
+        assert len(model_data["confusion_matrix"]) == 2  # binary classification
+        print(f"  Model {m} verified: Accuracy = {model_data['accuracy']:.4f}, F1 = {model_data['f1_score']:.4f}")
+        
+    print("GET /api/evaluation passed!")
+    
+    # 4. Test /api/evaluation/{model_name}
+    print("Testing GET /api/evaluation/SVM...")
+    res = requests.get(f"{base_url}/api/evaluation/SVM")
+    assert res.status_code == 200
+    svm_data = res.json()
+    assert "accuracy" in svm_data
+    assert "confusion_matrix" in svm_data
+    assert "classification_report" in svm_data
+    print("GET /api/evaluation/{model_name} passed!")
+
 def test_api_endpoints(filename):
     print("\n--- Testing API endpoints ---")
     import subprocess
@@ -110,6 +174,9 @@ def test_api_endpoints(filename):
         print(f"  Model distribution: {metrics['model_distribution']}")
         assert res.status_code == 200
         assert metrics["total_runs"] > 0
+        
+        # Test 5: New API endpoints
+        test_new_api_endpoints(base_url)
         
         print("\nAll API endpoint tests passed!")
         
